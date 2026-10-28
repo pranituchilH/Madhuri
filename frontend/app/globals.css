@@ -1,0 +1,48 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html { scroll-behavior: smooth; }
+  body { @apply bg-cream-light text-ink font-sans antialiased; }
+  h1, h2, h3, h4 { @apply font-display text-maroon-900; }
+  ::selection { @apply bg-maroon-700 text-cream; }
+  input, select, textarea { @apply text-ink; }
+}
+
+@layer components {
+  .btn { @apply inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-medium tracking-wide transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-60; }
+  .btn-primary { @apply btn bg-maroon-700 text-cream-light shadow-soft hover:bg-maroon-800; }
+  .btn-gold { @apply btn bg-gradient-to-r from-gold-500 to-gold-400 text-maroon-900 hover:from-gold-600 hover:to-gold-500; }
+  .btn-outline { @apply btn border border-maroon-700 text-maroon-700 hover:bg-maroon-700 hover:text-cream-light; }
+  .btn-ghost { @apply btn text-maroon-700 hover:bg-maroon-50; }
+  .btn-sm { @apply px-4 py-2 text-xs; }
+
+  .input { @apply w-full rounded-xl border border-gold-200 bg-white px-4 py-3 text-sm outline-none transition placeholder:text-ink-muted focus:border-maroon-500 focus:ring-2 focus:ring-maroon-100; }
+  .label { @apply mb-1.5 block text-xs font-medium uppercase tracking-wider text-ink-soft; }
+
+  .eyebrow { @apply text-xs font-medium uppercase tracking-[0.3em] text-gold-700; }
+  .section-title { @apply font-display text-3xl font-semibold leading-tight text-maroon-900 sm:text-4xl lg:text-5xl; }
+  .card { @apply rounded-2xl border border-gold-100 bg-white shadow-card; }
+
+  .gold-divider { @apply relative mx-auto my-4 h-px w-40 bg-gradient-to-r from-transparent via-gold-500 to-transparent; }
+  .gold-divider::after { content: ''; @apply absolute left-1/2 top-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rotate-45 bg-gold-500; }
+
+  .arch { border-radius: 999px 999px 1rem 1rem; }
+  .jaali {
+    background-color: theme('colors.cream.DEFAULT');
+    background-image: radial-gradient(circle at center, rgba(201, 162, 74, 0.22) 1.5px, transparent 1.6px),
+      linear-gradient(45deg, transparent 46%, rgba(201, 162, 74, 0.12) 47%, rgba(201, 162, 74, 0.12) 53%, transparent 54%),
+      linear-gradient(-45deg, transparent 46%, rgba(201, 162, 74, 0.12) 47%, rgba(201, 162, 74, 0.12) 53%, transparent 54%);
+    background-size: 28px 28px, 56px 56px, 56px 56px;
+  }
+  .jaali-dark {
+    background-color: theme('colors.maroon.900');
+    background-image: radial-gradient(circle at center, rgba(201, 162, 74, 0.25) 1.5px, transparent 1.6px),
+      linear-gradient(45deg, transparent 46%, rgba(201, 162, 74, 0.1) 47%, rgba(201, 162, 74, 0.1) 53%, transparent 54%),
+      linear-gradient(-45deg, transparent 46%, rgba(201, 162, 74, 0.1) 47%, rgba(201, 162, 74, 0.1) 53%, transparent 54%);
+    background-size: 28px 28px, 56px 56px, 56px 56px;
+  }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { scrollbar-width: none; }
+}
