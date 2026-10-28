@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
-import { CheckCircle2, Package } from 'lucide-react';
+import { CheckCircle2, Package, Truck } from 'lucide-react';
 import Spinner from '@/components/ui/Spinner';
 import StatusBadge from '@/components/ui/StatusBadge';
 import { useAuth } from '@/context/AuthContext';
@@ -109,7 +109,20 @@ export default function OrderPage() {
           ))}
         </ol>
       )}
-      {order.tracking_number && <p className="mt-6 text-sm">Tracking number: <b>{order.tracking_number}</b></p>}
+      {order.tracking_number && order.status !== 'cancelled' && (
+        <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-gold-200 bg-cream/60 px-5 py-4 text-sm">
+          <p className="flex items-center gap-2">
+            <Truck className="h-4 w-4 text-gold-600" />
+            <span>
+              {order.courier_name ? `${order.courier_name} · ` : ''}AWB <b>{order.tracking_number}</b>
+              {order.shipment_status && <span className="capitalize text-ink-muted"> · {order.shipment_status.toLowerCase()}</span>}
+            </span>
+          </p>
+          <a href={`https://shiprocket.co/tracking/${encodeURIComponent(order.tracking_number)}`} target="_blank" rel="noreferrer" className="btn-outline btn-sm">
+            Track shipment
+          </a>
+        </div>
+      )}
 
       <div className="mt-10 grid gap-6 md:grid-cols-[1fr_300px]">
         <div className="card divide-y divide-gold-100 px-6">

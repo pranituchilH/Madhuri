@@ -4,6 +4,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import { pool } from './config/db.js';
+import { migrate } from './db/migrate.js';
 import { errorHandler, notFound } from './middleware/error.js';
 import { UPLOAD_DIR } from './middleware/upload.js';
 import { asyncHandler } from './utils/http.js';
@@ -12,6 +13,7 @@ import catalogRoutes from './routes/catalog.js';
 import accountRoutes from './routes/account.js';
 import orderRoutes from './routes/orders.js';
 import miscRoutes, { razorpayWebhook } from './routes/misc.js';
+import shippingRoutes from './routes/shipping.js';
 import adminRoutes from './routes/admin/index.js';
 
 const app = express();
@@ -38,9 +40,16 @@ app.use('/api/admin', adminRoutes);
 app.use('/api', catalogRoutes);
 app.use('/api', orderRoutes);
 app.use('/api', miscRoutes);
+app.use('/api/shipping', shippingRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
+
+try {
+  await migrate();
+} catch (err) {
+  console.error(`Database migration failed: ${err.message}`);
+}
 
 const port = Number(process.env.PORT || 5050);
 app.listen(port, () => console.log(`Madhuri Sarees API running on http://localhost:${port}`));

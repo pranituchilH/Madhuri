@@ -1,5 +1,6 @@
-import { query } from '../config/db.js';
+import { query, transaction } from '../config/db.js';
 import { HttpError } from './http.js';
+import { orderStatusFor } from './shiprocket.js';
 
 export const storeRules = () => ({
   shippingFee: Number(process.env.SHIPPING_FEE ?? 99),
@@ -101,6 +102,23 @@ export async function getOrderWithItems(id, userId) {
   if (!order) throw new HttpError(404, 'Order not found');
   order.items = await query('SELECT id, product_id, name, sku, image, price, qty FROM order_items WHERE order_id = ?', [id]);
   return order;
+}
+
+const STATUS_ORDER = ['pending', 'confirmed', 'processing', 'shipped', 'delivered'];
+
+/** Records a courier status on an order and moves the order status forward (never backward, never out of cancelled). */
+export async function applyShipmentStatus(orderId, shipmentStatus) {
+  if (!shipmentStatus) return;
+  const next = orderStatusFor(shipmentStatus);
+  await transaction(async (q) => {
+    const [order] = await q('SELECT id, status FROM orders WHERE id = ? FOR UPDATE', [orderId]);
+    if (!order || order.status === 'delivered') return; // ignore late, out-of-order events
+    const updates = { shipment_status: String(shipmentStatus).slice(0, 60) };
+    if (next && order.status !== 'cancelled' && STATUS_ORDER.indexOf(next) > STATUS_ORDER.indexOf(order.status)) {
+      updates.status = next;
+    }
+    await q('UPDATE orders SET ? WHERE id = ?', [updates, order.id]);
+  });
 }
 
 export function newOrderNumber() {

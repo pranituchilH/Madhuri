@@ -3,7 +3,8 @@ import { query, transaction } from '../../config/db.js';
 import { requireAdmin, requireAuth } from '../../middleware/auth.js';
 import { deleteUpload, storeUploads, uploadImages } from '../../middleware/upload.js';
 import { asyncHandler, HttpError, paging, pick, required, slugify } from '../../utils/http.js';
-import { getOrderWithItems, releaseStock, reserveStock } from '../../utils/orders.js';
+import { applyShipmentStatus, getOrderWithItems, releaseStock, reserveStock } from '../../utils/orders.js';
+import { assignAwb, cancelShiprocketOrder, createShiprocketOrder, generateLabel, schedulePickup, trackAwb } from '../../utils/shiprocket.js';
 
 const router = Router();
 router.use(requireAuth, requireAdmin);
@@ -215,7 +216,66 @@ router.put('/orders/:id', asyncHandler(async (req, res) => {
     if (status === 'cancelled') await releaseStock(order.id, q);
     else if (status && status !== 'pending') await reserveStock(order.id, q);
   });
-  res.json({ order: await getOrderWithItems(req.params.id) });
+  const order = await getOrderWithItems(req.params.id);
+  if (status === 'cancelled' && order.shiprocket_order_id && order.shipment_status !== 'CANCELED') {
+    // Stop the courier from picking up a cancelled order; the order itself stays cancelled even if this fails.
+    try {
+      await cancelShiprocketOrder(order.shiprocket_order_id);
+      await query("UPDATE orders SET shipment_status = 'CANCELED' WHERE id = ?", [order.id]);
+      order.shipment_status = 'CANCELED';
+    } catch (err) {
+      console.error(`Could not cancel Shiprocket order for ${order.order_number}: ${err.message}`);
+    }
+  }
+  res.json({ order });
+}));
+
+// ------------------------------------------------------------------ shiprocket
+/**
+ * Ships an order via Shiprocket: create order → assign courier/AWB → schedule pickup → label.
+ * Each step's result is saved, so calling this again after a failure resumes where it stopped.
+ */
+router.post('/orders/:id/shiprocket', asyncHandler(async (req, res) => {
+  let order = await getOrderWithItems(req.params.id);
+  if (!['confirmed', 'processing'].includes(order.status)) throw new HttpError(400, 'Only confirmed or processing orders can be shipped');
+  if (order.payment_method === 'razorpay' && order.payment_status !== 'paid') throw new HttpError(400, 'This order has not been paid yet');
+  const save = (updates) => query('UPDATE orders SET ? WHERE id = ?', [updates, order.id]);
+
+  if (!order.shiprocket_shipment_id) {
+    const sr = await createShiprocketOrder(order);
+    await save({ shiprocket_order_id: String(sr.order_id), shiprocket_shipment_id: String(sr.shipment_id), status: 'processing' });
+    order = await getOrderWithItems(order.id);
+  }
+  if (!order.tracking_number) {
+    const { awb, courierName } = await assignAwb(order.shiprocket_shipment_id, req.body.courier_id);
+    await save({ tracking_number: awb, courier_name: courierName, shipment_status: 'AWB ASSIGNED' });
+  }
+  if (!order.label_url) {
+    await schedulePickup(order.shiprocket_shipment_id);
+    await save({ shipment_status: 'PICKUP SCHEDULED', label_url: await generateLabel(order.shiprocket_shipment_id) });
+  }
+  res.json({ order: await getOrderWithItems(order.id) });
+}));
+
+router.post('/orders/:id/shiprocket/track', asyncHandler(async (req, res) => {
+  const order = await getOrderWithItems(req.params.id);
+  if (!order.tracking_number) throw new HttpError(400, 'This order has no AWB yet');
+  await applyShipmentStatus(order.id, await trackAwb(order.tracking_number));
+  res.json({ order: await getOrderWithItems(order.id) });
+}));
+
+/** Cancels the shipment in Shiprocket (not the order itself) so it can be re-shipped or cancelled separately. */
+router.post('/orders/:id/shiprocket/cancel', asyncHandler(async (req, res) => {
+  const order = await getOrderWithItems(req.params.id);
+  if (!order.shiprocket_order_id) throw new HttpError(400, 'This order has not been sent to Shiprocket');
+  if (['shipped', 'delivered'].includes(order.status)) throw new HttpError(400, 'The courier already has this parcel; cancel it from the Shiprocket dashboard');
+  await cancelShiprocketOrder(order.shiprocket_order_id);
+  await query(
+    `UPDATE orders SET shiprocket_order_id = NULL, shiprocket_shipment_id = NULL, tracking_number = NULL, courier_name = NULL,
+       label_url = NULL, shipment_status = NULL WHERE id = ?`,
+    [order.id],
+  );
+  res.json({ order: await getOrderWithItems(order.id) });
 }));
 
 // ------------------------------------------------------------------ customers

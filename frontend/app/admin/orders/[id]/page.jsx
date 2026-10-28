@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { ArrowLeft, CreditCard, MapPin, Printer, Save, Truck, User } from 'lucide-react';
+import { ArrowLeft, CreditCard, ExternalLink, FileDown, MapPin, Package, Printer, RefreshCw, Save, Truck, User, XCircle } from 'lucide-react';
 import { api, img } from '@/lib/api';
 import { dateTime, inr } from '@/lib/format';
 import { useToast } from '@/context/ToastContext';
@@ -35,6 +35,53 @@ function Row({ label, children, strong }) {
   );
 }
 
+function ShiprocketCard({ order, busy, onAction }) {
+  const shipped = ['shipped', 'delivered'].includes(order.status);
+  const canShip = ['confirmed', 'processing'].includes(order.status) && (order.payment_method === 'cod' || order.payment_status === 'paid');
+  const complete = order.tracking_number && order.label_url;
+  const btn = (action, Icon, label, cls = 'btn-outline') => (
+    <button type="button" onClick={() => onAction(action)} disabled={Boolean(busy)} className={`${cls} btn-sm w-full`}>
+      {busy === action ? <Spinner className="h-4 w-4" /> : <Icon className="h-4 w-4" />}
+      {label}
+    </button>
+  );
+
+  return (
+    <section className="card space-y-3 p-5 print:hidden">
+      <h2 className="flex items-center gap-2 font-display text-lg font-semibold text-maroon-900">
+        <Package className="h-4 w-4 text-gold-600" /> Shiprocket
+      </h2>
+      {order.shiprocket_shipment_id ? (
+        <div className="space-y-1 text-sm text-ink-soft">
+          {order.courier_name && <Row label="Courier">{order.courier_name}</Row>}
+          {order.tracking_number && <Row label="AWB"><span className="font-mono text-xs">{order.tracking_number}</span></Row>}
+          {order.shipment_status && <Row label="Status"><span className="capitalize">{order.shipment_status.toLowerCase()}</span></Row>}
+          <Row label="Shipment ID"><span className="font-mono text-xs">{order.shiprocket_shipment_id}</span></Row>
+        </div>
+      ) : (
+        <p className="text-sm text-ink-soft">
+          {canShip ? 'Creates the shipment, assigns the recommended courier, schedules pickup and generates the label.' : 'Available once the order is confirmed and paid (or COD).'}
+        </p>
+      )}
+      <div className="space-y-2">
+        {canShip && !complete && btn('ship', Truck, order.shiprocket_shipment_id ? 'Resume shipping' : 'Ship with Shiprocket', 'btn-primary')}
+        {order.label_url && (
+          <a href={order.label_url} target="_blank" rel="noreferrer" className="btn-outline btn-sm w-full">
+            <FileDown className="h-4 w-4" /> Download label
+          </a>
+        )}
+        {order.tracking_number && (
+          <a href={`https://shiprocket.co/tracking/${encodeURIComponent(order.tracking_number)}`} target="_blank" rel="noreferrer" className="btn-outline btn-sm w-full">
+            <ExternalLink className="h-4 w-4" /> Tracking page
+          </a>
+        )}
+        {order.tracking_number && btn('track', RefreshCw, 'Refresh tracking')}
+        {order.shiprocket_order_id && !shipped && order.status !== 'cancelled' && btn('cancel', XCircle, 'Cancel shipment', 'btn-ghost text-red-700')}
+      </div>
+    </section>
+  );
+}
+
 export default function OrderDetailPage() {
   const { id } = useParams();
   const toast = useToast();
@@ -42,6 +89,7 @@ export default function OrderDetailPage() {
   const [error, setError] = useState('');
   const [form, setForm] = useState({ status: '', payment_status: '', tracking_number: '' });
   const [saving, setSaving] = useState(false);
+  const [shipBusy, setShipBusy] = useState('');
 
   function hydrate(o) {
     setOrder(o);
@@ -69,6 +117,21 @@ export default function OrderDetailPage() {
       toast(err.message, 'error');
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function shiprocket(action) {
+    if (action === 'cancel' && !window.confirm('Cancel this Shiprocket shipment? The order stays open so you can ship it again.')) return;
+    setShipBusy(action);
+    try {
+      const path = action === 'ship' ? '' : `/${action}`;
+      const d = await api(`/admin/orders/${id}/shiprocket${path}`, { method: 'POST' });
+      hydrate({ ...d.order, customer: order.customer });
+      toast({ ship: 'Shipment created and pickup scheduled', track: 'Tracking refreshed', cancel: 'Shipment cancelled' }[action]);
+    } catch (err) {
+      toast(err.message, 'error');
+    } finally {
+      setShipBusy('');
     }
   }
 
@@ -228,6 +291,8 @@ export default function OrderDetailPage() {
               Save changes
             </button>
           </form>
+
+          <ShiprocketCard order={order} busy={shipBusy} onAction={shiprocket} />
 
           <InfoCard icon={MapPin} title="Ship to">
             <p className="font-medium text-ink">{order.ship_name}</p>

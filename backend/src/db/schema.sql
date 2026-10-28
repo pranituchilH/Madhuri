@@ -140,11 +140,17 @@ CREATE TABLE orders (
   ship_pincode VARCHAR(10) NOT NULL,
   notes VARCHAR(500),
   tracking_number VARCHAR(100),
+  courier_name VARCHAR(100),
+  shipment_status VARCHAR(60),
+  shiprocket_order_id VARCHAR(30),
+  shiprocket_shipment_id VARCHAR(30),
+  label_url VARCHAR(500),
   stock_reserved TINYINT(1) NOT NULL DEFAULT 0,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
   INDEX idx_orders_rzp (razorpay_order_id),
+  INDEX idx_orders_tracking (tracking_number),
   INDEX idx_orders_created (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
